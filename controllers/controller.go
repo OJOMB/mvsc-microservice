@@ -18,21 +18,42 @@ type Controller struct {
 
 // New returns a new Server instance
 func New(router *mux.Router, logger *log.Logger, config *config.Config) *Controller {
-	router.Use(contentTypeMiddleware)
 	var c *Controller = &Controller{
 		config: config,
 		router: router,
 		logger: logger,
 	}
+
+	// setup middlewares
+	router.Use(c.contentTypeMiddleware)
+	router.Use(c.logURLServedMiddleWare)
+
+	// setup all routes
 	c.routes()
+
 	return c
 }
 
-func contentTypeMiddleware(next http.Handler) http.Handler {
+func (c *Controller) contentTypeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Add("Content-Type", "application/json")
+			if r.URL.Path == "/" {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				c.logger.Printf("Content-Type: %s", w.Header().Get("Content-Type"))
+			} else {
+				c.logger.Print("set the content-type to json")
+				w.Header().Set("Content-Type", "application/json")
+			}
 			next.ServeHTTP(w, r)
+		},
+	)
+}
+
+func (c *Controller) logURLServedMiddleWare(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
+			c.logger.Printf("%s served", r.URL.Path)
 		},
 	)
 }
@@ -44,6 +65,7 @@ func (c *Controller) routes() {
 
 	c.router.HandleFunc("/", c.handleIndex())
 	c.router.HandleFunc("/users/{id}", c.GetUser()).Methods("GET")
+	c.router.HandleFunc("/users", c.CreateUser()).Methods("POST")
 }
 
 func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +82,5 @@ func (c *Controller) ListenAndServe() {
 func (c *Controller) handleIndex() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./public/index.html")
-		c.logger.Print("/ served")
 	}
 }

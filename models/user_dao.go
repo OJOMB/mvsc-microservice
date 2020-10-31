@@ -5,33 +5,29 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/OJOMB/mvsc-microservice/utils"
 )
 
-func readUserFile() (map[string]User, error) {
-	jsonString, err := ioutil.ReadFile("./models/user_data.json")
-	if err != nil {
-		return nil, err
-	}
-	var users map[string]User
-	json.Unmarshal([]byte(jsonString), &users)
+// UserDAO is an exported instance of userDAO
+var UserDAO userDAOInterface
 
-	return users, nil
+type userDAOInterface interface {
+	GetUser(id string) (*User, *utils.ApplicationError)
+	CreateUser(user *User) *utils.ApplicationError
 }
 
-func writeUserFile(users map[string]User) error {
-	data, err := json.Marshal(&users)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile("./models/user_data.json", data, 0644)
-	return err
+func init() {
+	UserDAO = &userDAO{}
 }
+
+type userDAO struct{}
 
 // GetUser retrieves the user with the given unique id
-func GetUser(id string) (*User, *utils.ApplicationError) {
-	users, err := readUserFile()
+func (u *userDAO) GetUser(id string) (*User, *utils.ApplicationError) {
+	users, err := u.readUsersFromFile()
 	if err != nil {
 		return nil, &utils.ApplicationError{
 			Msg:    err.Error(),
@@ -48,4 +44,78 @@ func GetUser(id string) (*User, *utils.ApplicationError) {
 		}
 	}
 	return &user, nil
+}
+
+// CreateUser creates a user entry in the model
+func (u *userDAO) CreateUser(user *User) *utils.ApplicationError {
+	users, err := u.readUsersFromFile()
+	if err != nil {
+		return &utils.ApplicationError{
+			Msg:    err.Error(),
+			Status: http.StatusInternalServerError,
+			Code:   "internal_server_error",
+		}
+	}
+	if _, ok := users[user.ID]; ok {
+		return &utils.ApplicationError{
+			Msg:    fmt.Sprintf("Failed to create user with id: %s because it already exists", user.ID),
+			Status: http.StatusConflict,
+			Code:   "user_already_exists",
+		}
+	}
+	users[user.ID] = *user
+
+	err = u.writeUsersToFile(users)
+	if err != nil {
+		return &utils.ApplicationError{
+			Msg:    err.Error(),
+			Status: http.StatusInternalServerError,
+			Code:   "internal_server_error",
+		}
+	}
+	return nil
+}
+
+func (u *userDAO) getPathToJSONFile() (path string, err error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	_, dir := filepath.Split(workingDir)
+	fmt.Println(dir)
+	if dir == "models" {
+		path = "user_data.json"
+	} else {
+		path = "./models/user_data.json"
+	}
+	return
+}
+
+func (u *userDAO) readUsersFromFile() (users map[string]User, err error) {
+	path, err := u.getPathToJSONFile()
+	if err != nil {
+		return
+	}
+
+	jsonString, err := ioutil.ReadFile(path)
+	if err != nil {
+		return
+	}
+	json.Unmarshal([]byte(jsonString), &users)
+
+	return
+}
+
+func (u *userDAO) writeUsersToFile(users map[string]User) (err error) {
+	path, err := u.getPathToJSONFile()
+	if err != nil {
+		return
+	}
+
+	data, err := json.Marshal(&users)
+	if err != nil {
+		return
+	}
+	err = ioutil.WriteFile(path, data, 0644)
+	return
 }

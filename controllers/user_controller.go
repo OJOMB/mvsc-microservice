@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -38,7 +39,7 @@ func (c *Controller) GetUser() http.HandlerFunc {
 		}
 
 		// request user from server
-		user, err := services.GetUser(id)
+		user, err := services.UsersService.GetUser(id)
 
 		if err != nil {
 			c.logger.Printf(err.Msg)
@@ -61,5 +62,42 @@ func (c *Controller) GetUser() http.HandlerFunc {
 			return
 		}
 		w.Write(respData)
+	}
+}
+
+// CreateUser persists a new user
+func (c *Controller) CreateUser() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userData, err := ioutil.ReadAll(r.Body)
+
+		// case when we fail to read post body
+		if err != nil {
+			c.logger.Printf("Received unreadable request body")
+			appErr := &utils.ApplicationError{
+				Msg:    fmt.Sprint("Received unreadable request body"),
+				Status: http.StatusBadRequest,
+				Code:   "bad_request",
+			}
+			respData, mErr := json.Marshal(appErr)
+			if mErr != nil {
+				c.logger.Printf("Failed to marshal error response: %v", mErr)
+				http.Error(w, mErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(appErr.Status)
+			w.Write(respData)
+			return
+		}
+
+		// use data from request to create new user
+		user, appErr := services.UsersService.CreateUser(userData)
+		if err != nil {
+			respBody, _ := json.Marshal(appErr)
+			w.WriteHeader(appErr.Status)
+			w.Write(respBody)
+		}
+		respBody, _ := json.Marshal(user)
+		w.WriteHeader(http.StatusCreated)
+		w.Write(respBody)
 	}
 }
