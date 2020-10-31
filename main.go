@@ -12,7 +12,7 @@ import (
 
 var env = flag.String("env", "dev", "The environment in which the server is running ['dev', 'test', 'production']")
 
-func main() {
+func startApp() {
 	flag.Parse()
 
 	// get the logger
@@ -29,4 +29,8 @@ func main() {
 	c := controllers.New(r, logger, &cnfg)
 
 	c.ListenAndServe()
+}
+
+func main() {
+	startApp()
 }
