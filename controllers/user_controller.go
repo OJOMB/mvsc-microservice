@@ -1,103 +1,104 @@
 package controllers
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	"github.com/OJOMB/mvsc-microservice/services"
 	"github.com/OJOMB/mvsc-microservice/utils"
-	"github.com/gorilla/mux"
 )
 
+var (
+	// Users is the interface to the world of users
+	Users UsersInterface
+)
+
+func init() {
+	Users = &users{}
+}
+
+// UsersInterface describes the controllers required for Users as an entity
+type UsersInterface interface {
+	GetUser() gin.HandlerFunc
+	CreateUser() gin.HandlerFunc
+	UpdateUser() gin.HandlerFunc
+	DeleteUser() gin.HandlerFunc
+}
+
+type users struct{}
+
 // GetUser returns User data from the model for a given user id
-func (c *Controller) GetUser() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// get user id from mux vars
-		id := mux.Vars(r)["id"]
+func (u *users) GetUser() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		// get user id from context params
+		id := ctx.Param("userID")
 
 		// check we got a valid uuid4 string
 		if _, err := uuid.Parse(id); err != nil {
-			c.logger.Printf("user id not valid uuid4: %s", id)
+			log.Printf("user id not valid uuid4: %s", id)
 			appErr := &utils.ApplicationError{
 				Msg:    fmt.Sprintf("user id must be valid uuid4 string: %s", id),
 				Status: http.StatusBadRequest,
 				Code:   "bad_request",
 			}
-			respData, mErr := json.Marshal(appErr)
-			if mErr != nil {
-				c.logger.Printf("Failed to marshal error response: %v", mErr)
-				http.Error(w, mErr.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(appErr.Status)
-			w.Write(respData)
+			utils.RespondError(ctx, appErr)
 			return
 		}
 
 		// request user from server
-		user, err := services.UsersService.GetUser(id)
+		user, appErr := services.UsersService.GetUser(id)
 
-		if err != nil {
-			c.logger.Printf(err.Msg)
-			respData, mErr := json.Marshal(err)
-			if mErr != nil {
-				c.logger.Printf("Failed to marshal error response: %v", mErr)
-				http.Error(w, mErr.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(err.Status)
-			w.Write(respData)
+		if appErr != nil {
+			log.Printf(appErr.Msg)
+			utils.RespondError(ctx, appErr)
 			return
 		}
 
-		c.logger.Printf("Successfully retrieved user with id: %s", id)
-		respData, mErr := json.Marshal(user)
-		if mErr != nil {
-			c.logger.Printf("Failed to marshal response: %v", mErr)
-			http.Error(w, mErr.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Write(respData)
+		log.Printf("Successfully retrieved user with id: %s", id)
+		utils.Respond(ctx, http.StatusOK, user)
 	}
 }
 
 // CreateUser persists a new user
-func (c *Controller) CreateUser() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userData, err := ioutil.ReadAll(r.Body)
+func (u *users) CreateUser() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		userData, err := ioutil.ReadAll(ctx.Request.Body)
 
-		// case when we fail to read post body
+		// case when we fail to read user body
 		if err != nil {
-			c.logger.Printf("Received unreadable request body")
+			log.Printf("Received unreadable request body")
 			appErr := &utils.ApplicationError{
 				Msg:    fmt.Sprint("Received unreadable request body"),
 				Status: http.StatusBadRequest,
 				Code:   "bad_request",
 			}
-			respData, mErr := json.Marshal(appErr)
-			if mErr != nil {
-				c.logger.Printf("Failed to marshal error response: %v", mErr)
-				http.Error(w, mErr.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(appErr.Status)
-			w.Write(respData)
+			utils.RespondError(ctx, appErr)
 			return
 		}
 
 		// use data from request to create new user
 		user, appErr := services.UsersService.CreateUser(userData)
 		if err != nil {
-			respBody, _ := json.Marshal(appErr)
-			w.WriteHeader(appErr.Status)
-			w.Write(respBody)
+			utils.RespondError(ctx, appErr)
+			return
 		}
-		respBody, _ := json.Marshal(user)
-		w.WriteHeader(http.StatusCreated)
-		w.Write(respBody)
+		utils.Respond(ctx, http.StatusCreated, user)
 	}
+}
+
+// UpdateUser gets a user
+func (u *users) UpdateUser() gin.HandlerFunc {
+	// TODO: implement
+	return func(ctx *gin.Context) {}
+}
+
+// DeleteUser deletes a user
+func (u *users) DeleteUser() gin.HandlerFunc {
+	// TODO: implement
+	return func(ctx *gin.Context) {}
 }
