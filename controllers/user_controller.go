@@ -46,7 +46,7 @@ func (u *users) GetUser() gin.HandlerFunc {
 				Status: http.StatusBadRequest,
 				Code:   "bad_request",
 			}
-			ctx.JSON(appErr.Status, appErr)
+			utils.RespondError(ctx, appErr)
 			return
 		}
 
@@ -55,12 +55,12 @@ func (u *users) GetUser() gin.HandlerFunc {
 
 		if appErr != nil {
 			log.Printf(appErr.Msg)
-			ctx.JSON(appErr.Status, appErr)
+			utils.RespondError(ctx, appErr)
 			return
 		}
 
 		log.Printf("Successfully retrieved user with id: %s", id)
-		ctx.JSON(http.StatusOK, user)
+		utils.Respond(ctx, http.StatusOK, user)
 	}
 }
 
@@ -77,17 +77,17 @@ func (u *users) CreateUser() gin.HandlerFunc {
 				Status: http.StatusBadRequest,
 				Code:   "bad_request",
 			}
-			ctx.JSON(appErr.Status, appErr)
+			utils.RespondError(ctx, appErr)
 			return
 		}
 
 		// use data from request to create new user
 		user, appErr := services.UsersService.CreateUser(userData)
 		if err != nil {
-			ctx.JSON(appErr.Status, appErr)
+			utils.RespondError(ctx, appErr)
 			return
 		}
-		ctx.JSON(http.StatusCreated, user)
+		utils.Respond(ctx, http.StatusCreated, user)
 	}
 }
 
